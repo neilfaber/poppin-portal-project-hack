@@ -8,14 +8,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, Copy, Save, FileDown, Check } from "lucide-react";
 
 export function TextGenerator() {
   const [prompt, setPrompt] = useState("");
   const [generatedText, setGeneratedText] = useState("");
+  const [editableText, setEditableText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [creativity, setCreativity] = useState([0.7]);
   const [length, setLength] = useState([500]);
+  const [isEditing, setIsEditing] = useState(false);
+  const [copied, setCopied] = useState(false);
   const { toast } = useToast();
 
   const generateText = async () => {
@@ -37,6 +40,7 @@ export function TextGenerator() {
       const demoText = `# ${prompt}\n\nArtificial intelligence has rapidly evolved over the past decade, transforming industries and creating new possibilities for creative expression. The integration of AI in content creation tools has empowered creators to explore new horizons and push the boundaries of what's possible.\n\nAs we continue to develop more sophisticated algorithms and models, the relationship between human creativity and machine assistance becomes increasingly symbiotic. Rather than replacing human ingenuity, these tools amplify our capabilities and open doors to new forms of expression.\n\nThe future of AI-assisted creation is promising, with ongoing research focused on improving context understanding, generating more coherent narratives, and maintaining consistent style throughout longer texts. These advancements will further enhance the collaborative potential between humans and AI systems.`;
       
       setGeneratedText(demoText);
+      setEditableText(demoText);
       toast({
         title: "Text Generated",
         description: "Your AI-powered text has been created!",
@@ -54,6 +58,66 @@ export function TextGenerator() {
 
   const handlePromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setPrompt(e.target.value);
+  };
+
+  const handleEditableTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setEditableText(e.target.value);
+  };
+
+  const toggleEdit = () => {
+    setIsEditing(!isEditing);
+  };
+
+  const saveEdit = () => {
+    setGeneratedText(editableText);
+    setIsEditing(false);
+    toast({
+      title: "Changes Saved",
+      description: "Your edits have been saved successfully.",
+    });
+  };
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedText);
+      setCopied(true);
+      toast({
+        title: "Copied to Clipboard",
+        description: "Text has been copied to your clipboard.",
+      });
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      toast({
+        title: "Copy Failed",
+        description: "Failed to copy text to clipboard.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const exportAsText = () => {
+    try {
+      const blob = new Blob([generatedText], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${prompt.substring(0, 20) || 'generated'}-text.txt`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast({
+        title: "Export Successful",
+        description: "Your text has been exported as a .txt file.",
+      });
+    } catch (error) {
+      toast({
+        title: "Export Failed",
+        description: "Failed to export text as file.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -171,6 +235,13 @@ export function TextGenerator() {
                 <div className="flex items-center justify-center h-full">
                   <Loader2 className="h-8 w-8 animate-spin text-cosmic-400" />
                 </div>
+              ) : isEditing ? (
+                <Textarea 
+                  value={editableText} 
+                  onChange={handleEditableTextChange} 
+                  className="min-h-[380px] bg-transparent border-0 focus-visible:ring-0 resize-none"
+                  placeholder="Edit your generated text here..."
+                />
               ) : generatedText ? (
                 <div className="text-left whitespace-pre-line">{generatedText}</div>
               ) : (
@@ -181,15 +252,48 @@ export function TextGenerator() {
             </div>
           </CardContent>
           <CardFooter className="flex justify-between">
-            <Button variant="outline" disabled={!generatedText}>
-              Edit
-            </Button>
-            <Button variant="outline" disabled={!generatedText}>
-              Export
-            </Button>
-            <Button variant="outline" disabled={!generatedText}>
-              Copy
-            </Button>
+            {isEditing ? (
+              <>
+                <Button variant="outline" onClick={toggleEdit}>
+                  Cancel
+                </Button>
+                <Button onClick={saveEdit}>
+                  <Save className="mr-2 h-4 w-4" />
+                  Save Changes
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={toggleEdit} disabled={!generatedText}>
+                  Edit
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={exportAsText} 
+                  disabled={!generatedText}
+                >
+                  <FileDown className="mr-2 h-4 w-4" />
+                  Export as .txt
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={copyToClipboard} 
+                  disabled={!generatedText}
+                >
+                  {copied ? (
+                    <>
+                      <Check className="mr-2 h-4 w-4" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copy
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
           </CardFooter>
         </Card>
       </div>

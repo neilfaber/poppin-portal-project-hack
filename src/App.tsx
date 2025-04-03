@@ -10,6 +10,29 @@ import Dashboard from "./pages/Dashboard";
 import Collaboration from "./pages/Collaboration";
 import ProjectWorkspace from "./pages/ProjectWorkspace";
 import NotFound from "./pages/NotFound";
+import "./App.css";
+
+// Add custom animation to support audio visualization
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes float {
+    0% {
+      height: var(--original-height);
+    }
+    50% {
+      height: calc(var(--original-height) * 0.4);
+    }
+    100% {
+      height: var(--original-height);
+    }
+  }
+  
+  .animate-float {
+    animation: float 1s ease-in-out infinite;
+    animation-delay: var(--delay, 0s);
+  }
+`;
+document.head.appendChild(style);
 
 const queryClient = new QueryClient();
 
