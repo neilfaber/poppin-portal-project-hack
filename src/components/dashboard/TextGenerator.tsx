@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -120,6 +119,7 @@ export function TextGenerator() {
     }
   };
 
+  
   return (
     <div className="container my-8">
       <h2 className="text-3xl font-bold mb-8">AI Text Generator</h2>

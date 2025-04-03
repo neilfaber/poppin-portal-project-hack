@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Navbar from "@/components/dashboard/Navbar";
@@ -47,6 +46,9 @@ const ProjectWorkspace = () => {
   const [noteContent, setNoteContent] = useState("");
   const [editingUser, setEditingUser] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [isGeneratingText, setIsGeneratingText] = useState(false);
+  const [isEditingText, setIsEditingText] = useState(false);
+  const [editableNoteContent, setEditableNoteContent] = useState("");
   
   // Image collaboration state
   const [imagePrompt, setImagePrompt] = useState("");
@@ -119,6 +121,7 @@ const ProjectWorkspace = () => {
     if (!isLoading && project) {
       // Simulate fetching existing content
       setNoteContent("Welcome to our collaborative project! Let's create something amazing together.\n\nFeel free to edit this text and collaborate in real-time.");
+      setEditableNoteContent("Welcome to our collaborative project! Let's create something amazing together.\n\nFeel free to edit this text and collaborate in real-time.");
     }
   }, [isLoading, project]);
 
@@ -126,6 +129,26 @@ const ProjectWorkspace = () => {
     setNoteContent(e.target.value);
     // In a real application, this would send the update to a real-time database
     // like Firebase, Supabase, or a WebSocket connection
+  };
+  
+  const handleEditableTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setEditableNoteContent(e.target.value);
+  };
+
+  const toggleTextEdit = () => {
+    setIsEditingText(!isEditingText);
+    if (!isEditingText) {
+      setEditableNoteContent(noteContent);
+    }
+  };
+
+  const saveTextEdit = () => {
+    setNoteContent(editableNoteContent);
+    setIsEditingText(false);
+    toast({
+      title: "Changes Saved",
+      description: "Your edits have been saved and shared with collaborators.",
+    });
   };
   
   const copyToClipboard = async () => {
@@ -171,6 +194,46 @@ const ProjectWorkspace = () => {
     }
   };
   
+  const generateTextWithAI = async () => {
+    if (!noteContent.trim()) {
+      toast({
+        title: "Content Required",
+        description: "Please add some initial text before generating with AI",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGeneratingText(true);
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // In a real implementation, we would call an AI text generation API
+      const enhancedText = noteContent + "\n\n--- AI Generated Addition ---\n\n" +
+        "The collaborative nature of this project allows for seamless integration of ideas and perspectives. " +
+        "By leveraging the collective intelligence of our team, we can create more innovative and comprehensive solutions. " +
+        "Real-time collaboration eliminates communication bottlenecks and accelerates the development process. " +
+        "As we continue to refine our approach, the quality of our output will only improve.";
+      
+      setNoteContent(enhancedText);
+      setEditableNoteContent(enhancedText);
+      
+      toast({
+        title: "AI Text Generated",
+        description: "Your collaborative text has been enhanced with AI!",
+      });
+    } catch (error) {
+      toast({
+        title: "Generation Failed",
+        description: "There was an error generating your text. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingText(false);
+    }
+  };
+
   const generateImage = async () => {
     if (!imagePrompt.trim()) {
       toast({
@@ -407,12 +470,22 @@ const ProjectWorkspace = () => {
             <TabsContent value="text" className="p-2">
               <div className="space-y-4">
                 <div className="relative">
-                  <Textarea 
-                    placeholder="Start writing your collaborative text content..." 
-                    className="min-h-[400px]"
-                    value={noteContent}
-                    onChange={handleTextChange}
-                  />
+                  {isEditingText ? (
+                    <Textarea 
+                      placeholder="Edit your collaborative text content..." 
+                      className="min-h-[400px]"
+                      value={editableNoteContent}
+                      onChange={handleEditableTextChange}
+                    />
+                  ) : (
+                    <Textarea 
+                      placeholder="Start writing your collaborative text content..." 
+                      className="min-h-[400px]"
+                      value={noteContent}
+                      onChange={handleTextChange}
+                      readOnly={isGeneratingText}
+                    />
+                  )}
                   {editingUser && (
                     <div className="absolute bottom-2 left-2">
                       <Badge variant="secondary" className="animate-pulse bg-cosmic-400/10 text-cosmic-400">
@@ -433,11 +506,40 @@ const ProjectWorkspace = () => {
                     </Button>
                   </div>
                   <div>
-                    <Button variant="outline" className="mr-2" onClick={saveProject}>
-                      <Save className="h-4 w-4 mr-2" />
-                      Save Draft
-                    </Button>
-                    <Button>Generate with AI</Button>
+                    {isEditingText ? (
+                      <>
+                        <Button variant="outline" className="mr-2" onClick={toggleTextEdit}>
+                          Cancel
+                        </Button>
+                        <Button onClick={saveTextEdit}>
+                          <Save className="h-4 w-4 mr-2" />
+                          Save Changes
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button variant="outline" className="mr-2" onClick={toggleTextEdit}>
+                          Edit
+                        </Button>
+                        <Button variant="outline" className="mr-2" onClick={saveProject}>
+                          <Save className="h-4 w-4 mr-2" />
+                          Save Draft
+                        </Button>
+                        <Button 
+                          onClick={generateTextWithAI}
+                          disabled={isGeneratingText || !noteContent.trim()}
+                        >
+                          {isGeneratingText ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Generating...
+                            </>
+                          ) : (
+                            "Generate with AI"
+                          )}
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -738,116 +840,4 @@ const ProjectWorkspace = () => {
                           </div>
                         </div>
                       ) : (
-                        <Button variant="outline" size="sm" className="mt-2" onClick={() => handleFileUpload('image')}>
-                          <Upload className="h-4 w-4 mr-2" />
-                          Upload Image
-                        </Button>
-                      )}
-                    </div>
-                    
-                    {/* Music Upload */}
-                    <div className={`p-4 rounded-md border-2 border-dashed ${uploadedMusic ? 'border-green-500/30' : 'border-border'} flex flex-col items-center justify-center min-h-[150px]`}>
-                      <Music className={`h-8 w-8 mb-2 ${uploadedMusic ? 'text-green-500' : 'text-muted-foreground'}`} />
-                      <h4 className="font-medium mb-1">Music</h4>
-                      {uploadedMusic ? (
-                        <div className="text-center">
-                          <Badge className="bg-green-500/20 text-green-500 hover:bg-green-500/30 mb-2">Uploaded</Badge>
-                          <div className="flex justify-center mt-1">
-                            <Button variant="outline" size="sm" onClick={() => setIsPlaying(!isPlaying)}>
-                              {isPlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <Button variant="outline" size="sm" className="mt-2" onClick={() => handleFileUpload('music')}>
-                          <Upload className="h-4 w-4 mr-2" />
-                          Upload Music
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="multimodalPrompt">Video Description (Optional)</Label>
-                      <Textarea 
-                        id="multimodalPrompt"
-                        placeholder="Add additional instructions for video generation..."
-                        value={multimodalPrompt}
-                        onChange={(e) => setMultimodalPrompt(e.target.value)}
-                        className="min-h-[80px]"
-                      />
-                    </div>
-                    
-                    <Button 
-                      onClick={generateVideo} 
-                      className="w-full"
-                      disabled={isGeneratingVideo || (!uploadedText && !uploadedImage && !uploadedMusic)}
-                    >
-                      {isGeneratingVideo ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Generating Video...
-                        </>
-                      ) : (
-                        <>
-                          <Video className="mr-2 h-4 w-4" />
-                          Generate Video
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-                
-                {/* Video Output */}
-                {(isGeneratingVideo || videoGenerated) && (
-                  <div className="cosmic-card p-6">
-                    <h3 className="text-xl font-semibold mb-4">Generated Video</h3>
-                    
-                    <div className="aspect-video bg-cosmic-900/50 rounded-md overflow-hidden flex items-center justify-center">
-                      {isGeneratingVideo ? (
-                        <div className="flex flex-col items-center justify-center h-full">
-                          <Loader2 className="h-12 w-12 animate-spin text-cosmic-400 mb-4" />
-                          <p className="text-muted-foreground">Creating your collaborative video...</p>
-                          <p className="text-xs text-muted-foreground mt-2">This may take several minutes</p>
-                        </div>
-                      ) : videoGenerated ? (
-                        <div className="w-full h-full flex flex-col items-center justify-center bg-cosmic-800/50">
-                          <Video className="h-16 w-16 text-cosmic-400 mb-4" />
-                          <p className="text-lg font-medium mb-2">Video Generated Successfully</p>
-                          <p className="text-muted-foreground mb-4 text-center max-w-md">
-                            Your collaborative video is ready. In a real application, the video would appear here for playback.
-                          </p>
-                          <div className="flex space-x-4">
-                            <Button variant="outline">
-                              <Play className="mr-2 h-4 w-4" />
-                              Play Video
-                            </Button>
-                            <Button variant="outline">
-                              <FileDown className="mr-2 h-4 w-4" />
-                              Download
-                            </Button>
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </TabsContent>
-          </Tabs>
-        </div>
-      </div>
-      
-      {project && (
-        <ShareDialog
-          project={project}
-          open={shareDialogOpen}
-          onOpenChange={setShareDialogOpen}
-        />
-      )}
-    </div>
-  );
-};
-
-export default ProjectWorkspace;
+                        <Button variant="outline" size="sm" className="
