@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Rocket, Menu, X, User, Settings, LogOut } from "lucide-react";
+import { Rocket, Menu, X, User, Settings, LogOut, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export function Navbar() {
@@ -44,11 +44,15 @@ export function Navbar() {
             <Link to="/dashboard/multimodal" className="text-sm font-medium hover:text-primary">
               Multi-Modal Studio
             </Link>
+            <Link to="/collaboration" className="text-sm font-medium hover:text-primary flex items-center gap-1">
+              <Users className="h-4 w-4" />
+              Collaboration
+            </Link>
           </nav>
         </div>
 
         <div className="flex items-center gap-4">
-          <Button variant="outline" size="sm" className="hidden md:flex">
+          <Button variant="outline" size="sm" className="hidden md:flex" onClick={() => navigate('/collaboration')}>
             New Project
           </Button>
 
@@ -129,8 +133,21 @@ export function Navbar() {
           >
             Multi-Modal Studio
           </Link>
+          <Link 
+            to="/collaboration" 
+            className="flex items-center gap-2 py-2 px-4 rounded-md hover:bg-accent"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            <Users className="h-4 w-4" />
+            Collaboration
+          </Link>
           <div className="pt-2">
-            <Button className="w-full">New Project</Button>
+            <Button className="w-full" onClick={() => {
+              navigate('/collaboration');
+              setMobileMenuOpen(false);
+            }}>
+              New Project
+            </Button>
           </div>
         </nav>
       )}
