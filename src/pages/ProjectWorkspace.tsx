@@ -13,8 +13,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Project } from "./Collaboration";
+import { Project } from "@/types/project";
 import { toast } from "@/hooks/use-toast";
+import { generateContent, getProjectGeneratedContent } from "@/services/aiGeneration";
+import { getProjectById } from "@/services/projects";
+import { supabase } from "@/integrations/supabase/client";
 import { FileText, Image as ImageIcon, Music, Layers, ArrowLeft, Share2, Users, Loader2, Upload, Video, Save, RefreshCw, Copy, Check, FileDown, Play, Pause } from "lucide-react";
 
 type TabType = "text" | "image" | "music" | "multimodal";
@@ -27,13 +30,6 @@ interface CollaborativeUser {
   isActive: boolean;
   lastActive: Date;
 }
-
-// Mock data for active collaborators
-const mockActiveUsers: CollaborativeUser[] = [
-  { id: '1', name: 'John Doe', isActive: true, lastActive: new Date() },
-  { id: '2', name: 'Jane Smith', isActive: true, lastActive: new Date() },
-  { id: '3', name: 'Mike Johnson', isActive: false, lastActive: new Date(Date.now() - 1000 * 60 * 5) }
-];
 
 const ProjectWorkspace = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -63,6 +59,7 @@ const ProjectWorkspace = () => {
   const [musicGenerated, setMusicGenerated] = useState(false);
   const [genre, setGenre] = useState("electronic");
   const [duration, setDuration] = useState([30]);
+  const [musicData, setMusicData] = useState<any>(null);
   
   // Multimodal collaboration state
   const [multimodalPrompt, setMultimodalPrompt] = useState("");
@@ -72,8 +69,81 @@ const ProjectWorkspace = () => {
   const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
   const [videoGenerated, setVideoGenerated] = useState(false);
   
-  // Active users in the project - would come from a real-time database in production
-  const [activeUsers, setActiveUsers] = useState<CollaborativeUser[]>(mockActiveUsers);
+  // Project content
+  const [projectContent, setProjectContent] = useState<any[]>([]);
+  
+  // Active users in the project - would be from Supabase Presence in a production app
+  const [activeUsers, setActiveUsers] = useState<CollaborativeUser[]>([]);
+
+  useEffect(() => {
+    loadProjectData();
+    // Set up real-time subscriptions for project changes
+    if (projectId) {
+      const channel = supabase
+        .channel(`project-${projectId}`)
+        .on(
+          'postgres_changes',
+          { 
+            event: '*', 
+            schema: 'public', 
+            table: 'generated_content',
+            filter: `project_id=eq.${projectId}`
+          },
+          () => {
+            loadProjectContent();
+          }
+        )
+        .subscribe();
+
+      // In a real app, this would use Supabase Presence
+      setupPresenceSimulation();
+        
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [projectId]);
+  
+  // Simulate collaborative user presence
+  const setupPresenceSimulation = () => {
+    // In a real app, this would use Supabase Presence
+    const mockUsers: CollaborativeUser[] = [
+      { 
+        id: '1', 
+        name: 'John Doe', 
+        isActive: true, 
+        lastActive: new Date() 
+      },
+      { 
+        id: '2', 
+        name: 'Jane Smith', 
+        isActive: Math.random() > 0.5, 
+        lastActive: new Date() 
+      },
+      { 
+        id: '3', 
+        name: 'Mike Johnson', 
+        isActive: Math.random() > 0.7, 
+        lastActive: new Date(Date.now() - 1000 * 60 * 5) 
+      }
+    ];
+    
+    setActiveUsers(mockUsers);
+
+    // Simulate users joining/leaving
+    const presenceInterval = setInterval(() => {
+      const updatedUsers = mockUsers.map(user => ({
+        ...user,
+        isActive: user.id === '1' ? true : Math.random() > 0.3,
+        lastActive: user.id === '1' ? new Date() : 
+          Math.random() > 0.5 ? new Date() : user.lastActive
+      }));
+      
+      setActiveUsers(updatedUsers);
+    }, 10000);
+    
+    return () => clearInterval(presenceInterval);
+  };
 
   // Simulate collaborative typing in text mode
   useEffect(() => {
@@ -93,39 +163,83 @@ const ProjectWorkspace = () => {
     }
   }, [activeTab, activeUsers, editingUser]);
 
-  // This would be replaced with a real API call in a production app
-  useEffect(() => {
-    // Simulate loading the project
-    const timer = setTimeout(() => {
-      // In a real app, you would fetch project data from an API
-      const mockProject: Project = {
-        id: projectId || "",
-        name: "Sample Collaborative Project",
-        description: "This is a collaborative workspace for team members to work together on creative content.",
-        createdAt: new Date().toISOString(),
-        createdBy: "John Doe",
-        collaborators: ["Jane Smith", "Mike Johnson"]
-      };
-      
-      setProject(mockProject);
+  const loadProjectData = async () => {
+    if (!projectId) {
       setIsLoading(false);
-    }, 1000);
-    
-    return () => clearTimeout(timer);
-  }, [projectId]);
-
-  // Simulate loading initial project content
-  useEffect(() => {
-    if (!isLoading && project) {
-      // Simulate fetching existing content
-      setNoteContent("Welcome to our collaborative project! Let's create something amazing together.\n\nFeel free to edit this text and collaborate in real-time.");
+      return;
     }
-  }, [isLoading, project]);
+    
+    try {
+      const projectData = await getProjectById(projectId);
+      
+      if (!projectData) {
+        setIsLoading(false);
+        return;
+      }
+      
+      setProject(projectData);
+      
+      // Load project content
+      await loadProjectContent();
+    } catch (error) {
+      console.error("Error loading project:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load project data. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadProjectContent = async () => {
+    if (!projectId) return;
+    
+    try {
+      const content = await getProjectGeneratedContent(projectId);
+      setProjectContent(content);
+      
+      // Initialize content from the most recent items
+      const textContent = content.find(item => item.content_type === 'text');
+      if (textContent) {
+        setNoteContent(textContent.result);
+      } else {
+        setNoteContent("Welcome to our collaborative project! Let's create something amazing together.\n\nFeel free to edit this text and collaborate in real-time.");
+      }
+      
+      const imageContent = content.find(item => item.content_type === 'image');
+      if (imageContent) {
+        setImagePrompt(imageContent.prompt);
+        setGeneratedImage(imageContent.result);
+        const settings = imageContent.settings || {};
+        if (settings.style) setStyle(settings.style);
+        if (settings.resolution) setResolution(settings.resolution);
+        if (settings.detailLevel) setDetailLevel([settings.detailLevel]);
+      }
+      
+      const musicContent = content.find(item => item.content_type === 'music');
+      if (musicContent) {
+        setMusicPrompt(musicContent.prompt);
+        setMusicGenerated(true);
+        try {
+          const parsedData = JSON.parse(musicContent.result);
+          setMusicData(parsedData);
+        } catch (e) {
+          console.error("Error parsing music data:", e);
+        }
+        const settings = musicContent.settings || {};
+        if (settings.genre) setGenre(settings.genre);
+        if (settings.duration) setDuration([settings.duration]);
+      }
+    } catch (error) {
+      console.error("Error loading project content:", error);
+    }
+  };
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setNoteContent(e.target.value);
     // In a real application, this would send the update to a real-time database
-    // like Firebase, Supabase, or a WebSocket connection
   };
   
   const copyToClipboard = async () => {
@@ -183,20 +297,31 @@ const ProjectWorkspace = () => {
 
     setIsGeneratingImage(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      const result = await generateContent('image', imagePrompt, {
+        style,
+        resolution,
+        detailLevel: detailLevel[0]
+      }, projectId);
       
-      // In a real implementation, this would call an AI image generation API
-      setGeneratedImage("https://placehold.co/600x400/1a1a2e/FFFFFF?text=AI+Generated+Image");
+      if (result.error) {
+        toast({
+          title: "Generation Failed",
+          description: result.error,
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      setGeneratedImage(result.result || "");
       
       toast({
         title: "Image Generated",
         description: "Your collaborative AI image has been created!",
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Generation Failed",
-        description: "There was an error generating your image. Please try again.",
+        description: error.message || "There was an error generating your image",
         variant: "destructive",
       });
     } finally {
@@ -216,20 +341,37 @@ const ProjectWorkspace = () => {
 
     setIsGeneratingMusic(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      const result = await generateContent('music', musicPrompt, {
+        genre,
+        duration: duration[0]
+      }, projectId);
       
-      // In a real implementation, this would call an AI music generation API
+      if (result.error) {
+        toast({
+          title: "Generation Failed",
+          description: result.error,
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      try {
+        const parsedData = JSON.parse(result.result || "{}");
+        setMusicData(parsedData);
+      } catch (e) {
+        console.error("Error parsing music data:", e);
+      }
+      
       setMusicGenerated(true);
       
       toast({
         title: "Music Generated",
         description: "Your collaborative AI music has been created!",
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Generation Failed",
-        description: "There was an error generating your music. Please try again.",
+        description: error.message || "There was an error generating your music",
         variant: "destructive",
       });
     } finally {
@@ -284,10 +426,9 @@ const ProjectWorkspace = () => {
 
     setIsGeneratingVideo(true);
     try {
-      // Simulate API call
+      // In a real app, this would call an AI video generation API
       await new Promise(resolve => setTimeout(resolve, 5000));
       
-      // In a real implementation, this would call an AI video generation API
       setVideoGenerated(true);
       
       toast({
@@ -305,12 +446,66 @@ const ProjectWorkspace = () => {
     }
   };
   
-  const saveProject = () => {
+  const generateText = async () => {
+    if (!noteContent.trim()) {
+      toast({
+        title: "Content Required",
+        description: "Please enter some text to use as context for AI generation",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const result = await generateContent('text', noteContent, {
+        style: "creative",
+        wordCount: 300
+      }, projectId);
+      
+      if (result.error) {
+        toast({
+          title: "Generation Failed",
+          description: result.error,
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      setNoteContent(result.result || "");
+      
+      toast({
+        title: "Text Generated",
+        description: "AI has enhanced your text content!",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Generation Failed",
+        description: error.message || "There was an error generating your text",
+        variant: "destructive",
+      });
+    }
+  };
+  
+  const saveProject = async () => {
     // In a real app, this would save the current project state
-    toast({
-      title: "Project Saved",
-      description: "Your changes have been saved and shared with collaborators.",
-    });
+    try {
+      if (activeTab === 'text') {
+        await generateContent('text', "Text content save", {
+          content: noteContent
+        }, projectId);
+      }
+      
+      toast({
+        title: "Project Saved",
+        description: "Your changes have been saved and shared with collaborators.",
+      });
+    } catch (error) {
+      toast({
+        title: "Save Failed",
+        description: "There was an error saving your project. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (isLoading) {
@@ -319,6 +514,7 @@ const ProjectWorkspace = () => {
         <Navbar />
         <div className="container mt-8 flex justify-center">
           <div className="cosmic-card p-8 text-center w-full max-w-md">
+            <Loader2 className="h-8 w-8 animate-spin text-cosmic-400 mx-auto mb-4" />
             <p className="text-lg">Loading project workspace...</p>
           </div>
         </div>
@@ -437,7 +633,7 @@ const ProjectWorkspace = () => {
                       <Save className="h-4 w-4 mr-2" />
                       Save Draft
                     </Button>
-                    <Button>Generate with AI</Button>
+                    <Button onClick={generateText}>Generate with AI</Button>
                   </div>
                 </div>
               </div>
@@ -549,7 +745,7 @@ const ProjectWorkspace = () => {
                   </AspectRatio>
                   
                   <div className="flex justify-end space-x-2">
-                    <Button variant="outline" disabled={!generatedImage}>
+                    <Button variant="outline" disabled={!generatedImage} onClick={generateImage}>
                       <RefreshCw className="mr-2 h-4 w-4" />
                       Variations
                     </Button>
@@ -686,7 +882,7 @@ const ProjectWorkspace = () => {
                   </div>
                   
                   <div className="flex justify-end space-x-2">
-                    <Button variant="outline" disabled={!musicGenerated}>
+                    <Button variant="outline" disabled={!musicGenerated} onClick={generateMusic}>
                       <RefreshCw className="mr-2 h-4 w-4" />
                       Regenerate
                     </Button>

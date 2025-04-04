@@ -11,12 +11,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Project } from "@/pages/Collaboration";
 
 interface CreateProjectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreateProject: (project: Omit<Project, 'id' | 'createdAt' | 'createdBy' | 'collaborators'>) => void;
+  onCreateProject: (project: { name: string, description: string }) => void;
 }
 
 const CreateProjectDialog = ({ 
@@ -32,17 +31,19 @@ const CreateProjectDialog = ({
     e.preventDefault();
     setIsSubmitting(true);
     
-    // Simulate a little delay for better UX
-    setTimeout(() => {
-      onCreateProject({ name, description });
-      setName("");
-      setDescription("");
-      setIsSubmitting(false);
-    }, 500);
+    onCreateProject({ name, description });
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(isOpen) => {
+      if (!isSubmitting) {
+        onOpenChange(isOpen);
+        if (!isOpen) {
+          setName("");
+          setDescription("");
+        }
+      }
+    }}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Create New Project</DialogTitle>

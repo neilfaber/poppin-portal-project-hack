@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Loader2, Download, RefreshCw } from "lucide-react";
+import { generateContent, getUserGeneratedContent } from "@/services/aiGeneration";
 
 export function ImageGenerator() {
   const [prompt, setPrompt] = useState("");
@@ -20,9 +21,19 @@ export function ImageGenerator() {
   const [resolution, setResolution] = useState("512x512");
   const [style, setStyle] = useState("realistic");
   const [detailLevel, setDetailLevel] = useState([7]);
+  const [previousGenerations, setPreviousGenerations] = useState<any[]>([]);
   const { toast } = useToast();
 
   const placeholderImageUrl = "https://placehold.co/600x400/1a1a2e/FFFFFF?text=Generated+Image+Will+Appear+Here";
+
+  useEffect(() => {
+    loadPreviousGenerations();
+  }, []);
+
+  const loadPreviousGenerations = async () => {
+    const content = await getUserGeneratedContent('image');
+    setPreviousGenerations(content);
+  };
 
   const generateImage = async () => {
     if (!prompt.trim()) {
@@ -36,25 +47,66 @@ export function ImageGenerator() {
 
     setIsLoading(true);
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      
-      // In a real implementation, this would call an AI image generation API
-      // For demo, we'll use a placeholder image
-      setGeneratedImage(placeholderImageUrl);
+      const result = await generateContent('image', prompt, {
+        style,
+        resolution,
+        detailLevel: detailLevel[0],
+        negativePrompt: negativePrompt || undefined,
+      });
+
+      if (result.error) {
+        toast({
+          title: "Generation Failed",
+          description: result.error,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setGeneratedImage(result.result || "");
+      loadPreviousGenerations();
       
       toast({
         title: "Image Generated",
         description: "Your AI-powered image has been created!",
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Generation Failed",
-        description: "There was an error generating your image. Please try again.",
+        description: error.message || "There was an error generating your image",
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const downloadImage = async () => {
+    if (!generatedImage) return;
+    
+    try {
+      const response = await fetch(generatedImage);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `generated-image-${new Date().getTime()}.png`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast({
+        title: "Download Started",
+        description: "Your image is being downloaded",
+      });
+    } catch (error) {
+      toast({
+        title: "Download Failed",
+        description: "Failed to download image",
+        variant: "destructive",
+      });
     }
   };
 
@@ -209,16 +261,58 @@ export function ImageGenerator() {
             </AspectRatio>
           </CardContent>
           <CardFooter className="flex justify-between">
-            <Button variant="outline" disabled={!generatedImage || generatedImage === placeholderImageUrl}>
+            <Button 
+              variant="outline" 
+              disabled={!generatedImage || generatedImage === placeholderImageUrl}
+              onClick={() => generateImage()}
+            >
               <RefreshCw className="mr-2 h-4 w-4" />
               Variations
             </Button>
-            <Button variant="outline" disabled={!generatedImage || generatedImage === placeholderImageUrl}>
+            <Button 
+              variant="outline" 
+              disabled={!generatedImage || generatedImage === placeholderImageUrl}
+              onClick={downloadImage}
+            >
               <Download className="mr-2 h-4 w-4" />
               Download
             </Button>
           </CardFooter>
         </Card>
+
+        {previousGenerations.length > 0 && (
+          <Card className="cosmic-card lg:col-span-2 mt-4">
+            <CardHeader>
+              <CardTitle>Your Previous Generations</CardTitle>
+              <CardDescription>
+                Previously generated images
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {previousGenerations.slice(0, 8).map((gen) => (
+                  <div key={gen.id} className="cursor-pointer group" onClick={() => {
+                    setPrompt(gen.prompt);
+                    setGeneratedImage(gen.result);
+                    const settings = gen.settings || {};
+                    if (settings.style) setStyle(settings.style);
+                    if (settings.resolution) setResolution(settings.resolution);
+                    if (settings.detailLevel) setDetailLevel([settings.detailLevel]);
+                  }}>
+                    <AspectRatio ratio={1} className="overflow-hidden rounded-md border border-border">
+                      <img 
+                        src={gen.result} 
+                        alt={gen.prompt} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                      />
+                    </AspectRatio>
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{gen.prompt}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

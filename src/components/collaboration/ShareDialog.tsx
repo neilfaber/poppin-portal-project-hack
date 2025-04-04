@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { Project } from "@/pages/Collaboration";
+import { Project } from "@/types/project";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Copy, Check } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
+import { addCollaborator } from "@/services/projects";
 
 interface ShareDialogProps {
   project: Project;
@@ -23,6 +24,7 @@ interface ShareDialogProps {
 export function ShareDialog({ project, open, onOpenChange }: ShareDialogProps) {
   const [email, setEmail] = useState("");
   const [copied, setCopied] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
   const projectLink = `${window.location.origin}/project/${project.id}`;
@@ -37,13 +39,28 @@ export function ShareDialog({ project, open, onOpenChange }: ShareDialogProps) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const inviteCollaborator = (e: React.FormEvent) => {
+  const inviteCollaborator = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast({
-      title: "Invitation sent",
-      description: `An invitation has been sent to ${email}`
-    });
-    setEmail("");
+    setIsSubmitting(true);
+    
+    try {
+      // In a real implementation, this would use the Supabase functions
+      await addCollaborator(project.id, email);
+      
+      toast({
+        title: "Invitation sent",
+        description: `An invitation has been sent to ${email}`
+      });
+      setEmail("");
+    } catch (error) {
+      toast({
+        title: "Invitation failed",
+        description: "There was an error sending the invitation",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -94,8 +111,8 @@ export function ShareDialog({ project, open, onOpenChange }: ShareDialogProps) {
                   onChange={(e) => setEmail(e.target.value)}
                   className="flex-1"
                 />
-                <Button type="submit" disabled={!email.trim()}>
-                  Invite
+                <Button type="submit" disabled={!email.trim() || isSubmitting}>
+                  {isSubmitting ? "Inviting..." : "Invite"}
                 </Button>
               </div>
             </div>

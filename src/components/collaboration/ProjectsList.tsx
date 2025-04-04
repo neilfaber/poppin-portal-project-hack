@@ -1,7 +1,7 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Project } from "@/pages/Collaboration";
+import { Project } from "@/types/project";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,14 +50,14 @@ const ProjectsList = ({ projects }: ProjectsListProps) => {
           <CardContent>
             <div className="flex items-center text-sm text-muted-foreground">
               <Clock className="mr-2 h-4 w-4" />
-              <span>Created {formatDistanceToNow(new Date(project.createdAt))} ago</span>
+              <span>Created {formatDistanceToNow(new Date(project.created_at))} ago</span>
             </div>
             <div className="flex items-center mt-2 text-sm text-muted-foreground">
               <Users className="mr-2 h-4 w-4" />
               <span>
-                {project.collaborators.length === 0
+                {!project.project_collaborators || project.project_collaborators.length === 0
                   ? "No collaborators yet"
-                  : `${project.collaborators.length} collaborator${project.collaborators.length !== 1 ? "s" : ""}`}
+                  : `${project.project_collaborators.length} collaborator${project.project_collaborators.length !== 1 ? "s" : ""}`}
               </span>
             </div>
           </CardContent>

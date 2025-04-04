@@ -1,23 +1,35 @@
-import { useState } from "react";
+
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Play, Pause, SkipBack, Download } from "lucide-react";
+import { Loader2, RefreshCw, Play, Pause, Download, Save } from "lucide-react";
+import { generateContent, getUserGeneratedContent } from "@/services/aiGeneration";
 
 export function MusicGenerator() {
   const [prompt, setPrompt] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [hasGenerated, setHasGenerated] = useState(false);
-  const [duration, setDuration] = useState([30]);
   const [genre, setGenre] = useState("electronic");
-  const [mood, setMood] = useState([5]);
+  const [mood, setMood] = useState("relaxed");
+  const [duration, setDuration] = useState([30]);
+  const [musicGenerated, setMusicGenerated] = useState(false);
+  const [musicData, setMusicData] = useState<any>(null);
+  const [previousGenerations, setPreviousGenerations] = useState<any[]>([]);
   const { toast } = useToast();
+
+  useEffect(() => {
+    loadPreviousGenerations();
+  }, []);
+
+  const loadPreviousGenerations = async () => {
+    const content = await getUserGeneratedContent('music');
+    setPreviousGenerations(content);
+  };
 
   const generateMusic = async () => {
     if (!prompt.trim()) {
@@ -29,31 +41,60 @@ export function MusicGenerator() {
       return;
     }
 
-    setIsLoading(true);
+    setIsGenerating(true);
+    setIsPlaying(false);
+    setMusicGenerated(false);
+    
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      
-      // In a real implementation, this would call an AI music generation API
-      setHasGenerated(true);
+      const result = await generateContent('music', prompt, {
+        genre,
+        mood,
+        duration: duration[0],
+      });
+
+      if (result.error) {
+        toast({
+          title: "Generation Failed",
+          description: result.error,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // In a real app, this would be a URL to an audio file
+      // For demo, we set the JSON string that contains the music metadata
+      const parsedData = JSON.parse(result.result || "{}");
+      setMusicData(parsedData);
+      setMusicGenerated(true);
+      loadPreviousGenerations();
       
       toast({
         title: "Music Generated",
         description: "Your AI-composed music has been created!",
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Generation Failed",
-        description: "There was an error generating your music. Please try again.",
+        description: error.message || "There was an error generating your music",
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsGenerating(false);
     }
   };
 
   const togglePlayback = () => {
+    if (!musicGenerated) return;
     setIsPlaying(!isPlaying);
+  };
+
+  const saveMusic = () => {
+    if (!musicGenerated) return;
+    
+    toast({
+      title: "Music Saved",
+      description: "Your generated music has been saved to your library",
+    });
   };
 
   return (
@@ -80,13 +121,8 @@ export function MusicGenerator() {
               />
             </div>
             
-            <Tabs defaultValue="basic">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="basic">Basic</TabsTrigger>
-                <TabsTrigger value="advanced">Advanced</TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="basic" className="space-y-4 pt-4">
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="genre">Genre</Label>
                   <Select value={genre} onValueChange={setGenre}>
@@ -106,111 +142,46 @@ export function MusicGenerator() {
                 </div>
                 
                 <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <Label htmlFor="duration">Duration (seconds)</Label>
-                    <span>{duration[0]}</span>
-                  </div>
-                  <Slider 
-                    id="duration"
-                    min={15} 
-                    max={60} 
-                    step={5} 
-                    value={duration} 
-                    onValueChange={setDuration} 
-                  />
+                  <Label htmlFor="mood">Mood</Label>
+                  <Select value={mood} onValueChange={setMood}>
+                    <SelectTrigger id="mood">
+                      <SelectValue placeholder="Select mood" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="relaxed">Relaxed</SelectItem>
+                      <SelectItem value="energetic">Energetic</SelectItem>
+                      <SelectItem value="happy">Happy</SelectItem>
+                      <SelectItem value="sad">Sad</SelectItem>
+                      <SelectItem value="dramatic">Dramatic</SelectItem>
+                      <SelectItem value="mysterious">Mysterious</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <Label htmlFor="mood">Mood (Calm to Energetic)</Label>
-                    <span>{mood[0]}/10</span>
-                  </div>
-                  <Slider 
-                    id="mood"
-                    min={1} 
-                    max={10} 
-                    step={1} 
-                    value={mood} 
-                    onValueChange={setMood} 
-                  />
-                </div>
-              </TabsContent>
+              </div>
               
-              <TabsContent value="advanced" className="space-y-4 pt-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="instruments">Primary Instrument</Label>
-                    <Select defaultValue="piano">
-                      <SelectTrigger id="instruments">
-                        <SelectValue placeholder="Select instrument" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="piano">Piano</SelectItem>
-                        <SelectItem value="guitar">Guitar</SelectItem>
-                        <SelectItem value="strings">Strings</SelectItem>
-                        <SelectItem value="synth">Synthesizer</SelectItem>
-                        <SelectItem value="drums">Drums</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="tempo">Tempo (BPM)</Label>
-                    <Select defaultValue="120">
-                      <SelectTrigger id="tempo">
-                        <SelectValue placeholder="Select tempo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="60">60 BPM (Very Slow)</SelectItem>
-                        <SelectItem value="90">90 BPM (Slow)</SelectItem>
-                        <SelectItem value="120">120 BPM (Moderate)</SelectItem>
-                        <SelectItem value="140">140 BPM (Fast)</SelectItem>
-                        <SelectItem value="180">180 BPM (Very Fast)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="key">Key</Label>
-                    <Select defaultValue="c_major">
-                      <SelectTrigger id="key">
-                        <SelectValue placeholder="Select key" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="c_major">C Major</SelectItem>
-                        <SelectItem value="a_minor">A Minor</SelectItem>
-                        <SelectItem value="g_major">G Major</SelectItem>
-                        <SelectItem value="e_minor">E Minor</SelectItem>
-                        <SelectItem value="d_major">D Major</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="structure">Structure</Label>
-                    <Select defaultValue="verse_chorus">
-                      <SelectTrigger id="structure">
-                        <SelectValue placeholder="Select structure" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ambient">Ambient/No Structure</SelectItem>
-                        <SelectItem value="verse_chorus">Verse-Chorus</SelectItem>
-                        <SelectItem value="aaba">AABA Form</SelectItem>
-                        <SelectItem value="loop">Loop-based</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <Label htmlFor="duration">Duration (seconds)</Label>
+                  <span>{duration[0]}</span>
                 </div>
-              </TabsContent>
-            </Tabs>
+                <Slider 
+                  id="duration"
+                  min={15} 
+                  max={60} 
+                  step={5} 
+                  value={duration} 
+                  onValueChange={setDuration} 
+                />
+              </div>
+            </div>
           </CardContent>
           <CardFooter>
             <Button 
               onClick={generateMusic} 
               className="w-full"
-              disabled={isLoading || !prompt.trim()}
+              disabled={isGenerating || !prompt.trim()}
             >
-              {isLoading ? (
+              {isGenerating ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Composing...
@@ -226,17 +197,17 @@ export function MusicGenerator() {
           <CardHeader>
             <CardTitle>Generated Music</CardTitle>
             <CardDescription>
-              Your AI-composed music will be ready to play here
+              Your AI-composed melody will be ready to play here
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col items-center justify-center min-h-[300px] p-4 bg-cosmic-900/50 rounded-md">
-              {isLoading ? (
+              {isGenerating ? (
                 <div className="flex flex-col items-center justify-center h-full">
                   <Loader2 className="h-10 w-10 animate-spin text-cosmic-400 mb-4" />
                   <p className="text-sm text-muted-foreground">Composing your melody...</p>
                 </div>
-              ) : hasGenerated ? (
+              ) : musicGenerated ? (
                 <div className="w-full space-y-8">
                   <div className="w-full bg-cosmic-800/50 h-32 rounded-lg flex items-center justify-center relative overflow-hidden">
                     <div className="absolute inset-0">
@@ -259,14 +230,11 @@ export function MusicGenerator() {
                     </div>
                     
                     <div className="z-10 bg-cosmic-800/70 backdrop-blur-sm px-6 py-2 rounded-full">
-                      {prompt}
+                      {musicData?.title || prompt}
                     </div>
                   </div>
                   
                   <div className="flex justify-center space-x-4">
-                    <Button variant="outline" size="icon">
-                      <SkipBack className="h-5 w-5" />
-                    </Button>
                     <Button 
                       variant="default" 
                       size="icon" 
@@ -279,9 +247,6 @@ export function MusicGenerator() {
                         <Play className="h-5 w-5 ml-1" />
                       )}
                     </Button>
-                    <Button variant="outline" size="icon">
-                      <Download className="h-5 w-5" />
-                    </Button>
                   </div>
                 </div>
               ) : (
@@ -292,26 +257,66 @@ export function MusicGenerator() {
               )}
             </div>
           </CardContent>
-          <CardFooter>
-            <div className="w-full space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>0:00</span>
-                <span>{duration[0]}s</span>
-              </div>
-              <div className="h-1 w-full bg-cosmic-700 rounded-full overflow-hidden">
-                {isPlaying && hasGenerated && (
-                  <div 
-                    className="h-full bg-cosmic-400"
-                    style={{ 
-                      width: '50%',
-                      transition: 'width 1s linear'
-                    }}
-                  ></div>
-                )}
-              </div>
-            </div>
+          <CardFooter className="flex justify-between">
+            <Button variant="outline" disabled={!musicGenerated} onClick={generateMusic}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Regenerate
+            </Button>
+            <Button variant="outline" disabled={!musicGenerated} onClick={saveMusic}>
+              <Save className="mr-2 h-4 w-4" />
+              Save to Library
+            </Button>
           </CardFooter>
         </Card>
+
+        {previousGenerations.length > 0 && (
+          <Card className="cosmic-card lg:col-span-2 mt-4">
+            <CardHeader>
+              <CardTitle>Your Music Library</CardTitle>
+              <CardDescription>
+                Previously generated music compositions
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="divide-y divide-border">
+                {previousGenerations.slice(0, 5).map((gen) => {
+                  const parsedData = JSON.parse(gen.result || "{}");
+                  return (
+                    <div key={gen.id} className="py-3 flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium">{gen.prompt}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {parsedData.genre || 'Unknown genre'} • {parsedData.duration || '30'} seconds
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Play className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => {
+                            setPrompt(gen.prompt);
+                            const settings = gen.settings || {};
+                            if (settings.genre) setGenre(settings.genre);
+                            if (settings.mood) setMood(settings.mood);
+                            if (settings.duration) setDuration([settings.duration]);
+                            setMusicData(parsedData);
+                            setMusicGenerated(true);
+                          }}
+                        >
+                          <RefreshCw className="h-4 w-4 mr-1" />
+                          Use
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

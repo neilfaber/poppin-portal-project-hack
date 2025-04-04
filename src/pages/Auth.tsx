@@ -1,67 +1,144 @@
 
-import { useEffect } from 'react';
-import AuthForm from "@/components/auth/AuthForm";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useNavigate } from 'react-router-dom';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import { Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const Auth = () => {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [authMode, setAuthMode] = useState<"sign-in" | "sign-up">("sign-in");
   const navigate = useNavigate();
+  const { toast } = useToast();
 
-  useEffect(() => {
-    // Create stars in the background
-    const createStars = () => {
-      const container = document.querySelector('body');
-      if (!container) return;
-      
-      const existingStars = document.querySelectorAll('.star');
-      existingStars.forEach(star => star.remove());
-      
-      for (let i = 0; i < 100; i++) {
-        const star = document.createElement('div');
-        star.classList.add('star');
-        
-        // Random positions
-        star.style.left = `${Math.random() * 100}vw`;
-        star.style.top = `${Math.random() * 100}vh`;
-        
-        // Random sizes (some stars bigger than others)
-        const size = `${0.1 + Math.random() * 0.4}rem`;
-        star.style.width = size;
-        star.style.height = size;
-        
-        // Random opacity
-        star.style.opacity = `${0.3 + Math.random() * 0.7}`;
-        
-        container.appendChild(star);
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      if (authMode === "sign-up") {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+
+        if (error) throw error;
+
+        toast({
+          title: "Account created",
+          description: "Check your email to verify your account",
+        });
+
+        // In development mode where email verification is disabled
+        navigate("/dashboard");
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) throw error;
+
+        toast({
+          title: "Sign in successful",
+          description: "Welcome back!",
+        });
+
+        navigate("/dashboard");
       }
-    };
-    
-    createStars();
-    
-    // Recreate stars on window resize
-    window.addEventListener('resize', createStars);
-    
-    return () => {
-      window.removeEventListener('resize', createStars);
-      const stars = document.querySelectorAll('.star');
-      stars.forEach(star => star.remove());
-    };
-  }, []);
+    } catch (error: any) {
+      toast({
+        title: "Authentication error",
+        description: error.message || "An error occurred during authentication",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen">
-      <header className="p-4 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <span className="font-bold text-2xl bg-clip-text text-transparent bg-gradient-to-r from-cosmic-400 to-cosmic-600">
-            CreativeAI Portal
-          </span>
-        </div>
-        <Button variant="ghost" onClick={() => navigate('/')}>
-          Home
-        </Button>
-      </header>
-      
-      <AuthForm />
+    <div className="min-h-screen flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        <Card className="cosmic-card">
+          <CardHeader className="space-y-1 text-center">
+            <CardTitle className="text-2xl font-bold">CreativeAI Portal</CardTitle>
+            <CardDescription>
+              {authMode === "sign-in"
+                ? "Enter your credentials to sign in to your account"
+                : "Create an account to get started"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs
+              defaultValue="sign-in"
+              value={authMode}
+              onValueChange={(value) => setAuthMode(value as "sign-in" | "sign-up")}
+              className="w-full"
+            >
+              <TabsList className="grid w-full grid-cols-2 mb-6">
+                <TabsTrigger value="sign-in">Sign In</TabsTrigger>
+                <TabsTrigger value="sign-up">Sign Up</TabsTrigger>
+              </TabsList>
+
+              <form onSubmit={handleAuth}>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="name@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {authMode === "sign-in" ? "Signing in..." : "Creating account..."}
+                      </>
+                    ) : authMode === "sign-in" ? (
+                      "Sign In"
+                    ) : (
+                      "Sign Up"
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </Tabs>
+          </CardContent>
+          <CardFooter className="flex flex-col gap-2">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => navigate("/")}
+            >
+              Back to Home
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
     </div>
   );
 };

@@ -1,27 +1,34 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Slider } from "@/components/ui/slider";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Loader2, Copy, Save, Download, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Copy, Save, FileDown, Check } from "lucide-react";
+import { generateContent, getUserGeneratedContent } from "@/services/aiGeneration";
 
 export function TextGenerator() {
   const [prompt, setPrompt] = useState("");
   const [generatedText, setGeneratedText] = useState("");
-  const [editableText, setEditableText] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [creativity, setCreativity] = useState([0.7]);
-  const [length, setLength] = useState([500]);
-  const [isEditing, setIsEditing] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
+  const [style, setStyle] = useState("informative");
+  const [wordCount, setWordCount] = useState("300");
+  const [previousGenerations, setPreviousGenerations] = useState<any[]>([]);
   const { toast } = useToast();
 
-  const generateText = async () => {
+  useEffect(() => {
+    loadPreviousGenerations();
+  }, []);
+
+  const loadPreviousGenerations = async () => {
+    const content = await getUserGeneratedContent('text');
+    setPreviousGenerations(content);
+  };
+
+  const handleGenerate = async () => {
     if (!prompt.trim()) {
       toast({
         title: "Prompt Required",
@@ -31,90 +38,76 @@ export function TextGenerator() {
       return;
     }
 
-    setIsLoading(true);
+    setIsGenerating(true);
     try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const result = await generateContent('text', prompt, {
+        style,
+        wordCount: parseInt(wordCount),
+      });
+
+      if (result.error) {
+        toast({
+          title: "Generation Failed",
+          description: result.error,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setGeneratedText(result.result || "");
+      loadPreviousGenerations();
       
-      // In a real application, this would be a fetch call to an AI text generation API
-      const demoText = `# ${prompt}\n\nArtificial intelligence has rapidly evolved over the past decade, transforming industries and creating new possibilities for creative expression. The integration of AI in content creation tools has empowered creators to explore new horizons and push the boundaries of what's possible.\n\nAs we continue to develop more sophisticated algorithms and models, the relationship between human creativity and machine assistance becomes increasingly symbiotic. Rather than replacing human ingenuity, these tools amplify our capabilities and open doors to new forms of expression.\n\nThe future of AI-assisted creation is promising, with ongoing research focused on improving context understanding, generating more coherent narratives, and maintaining consistent style throughout longer texts. These advancements will further enhance the collaborative potential between humans and AI systems.`;
-      
-      setGeneratedText(demoText);
-      setEditableText(demoText);
       toast({
         title: "Text Generated",
         description: "Your AI-powered text has been created!",
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Generation Failed",
-        description: "There was an error generating your text. Please try again.",
+        description: error.message || "There was an error generating your text",
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setIsGenerating(false);
     }
-  };
-
-  const handlePromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setPrompt(e.target.value);
-  };
-
-  const handleEditableTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setEditableText(e.target.value);
-  };
-
-  const toggleEdit = () => {
-    setIsEditing(!isEditing);
-  };
-
-  const saveEdit = () => {
-    setGeneratedText(editableText);
-    setIsEditing(false);
-    toast({
-      title: "Changes Saved",
-      description: "Your edits have been saved successfully.",
-    });
   };
 
   const copyToClipboard = async () => {
     try {
       await navigator.clipboard.writeText(generatedText);
-      setCopied(true);
+      setIsCopied(true);
       toast({
         title: "Copied to Clipboard",
-        description: "Text has been copied to your clipboard.",
+        description: "Text has been copied to your clipboard",
       });
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setIsCopied(false), 2000);
     } catch (error) {
       toast({
         title: "Copy Failed",
-        description: "Failed to copy text to clipboard.",
+        description: "Failed to copy text to clipboard",
         variant: "destructive",
       });
     }
   };
 
-  const exportAsText = () => {
+  const downloadAsText = () => {
     try {
-      const blob = new Blob([generatedText], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${prompt.substring(0, 20) || 'generated'}-text.txt`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      
+      const element = document.createElement("a");
+      const file = new Blob([generatedText], { type: "text/plain" });
+      element.href = URL.createObjectURL(file);
+      element.download = `generated-text-${new Date().getTime()}.txt`;
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+
       toast({
-        title: "Export Successful",
-        description: "Your text has been exported as a .txt file.",
+        title: "Download Started",
+        description: "Your text file is being downloaded",
       });
     } catch (error) {
       toast({
-        title: "Export Failed",
-        description: "Failed to export text as file.",
+        title: "Download Failed",
+        description: "Failed to download text file",
         variant: "destructive",
       });
     }
@@ -129,88 +122,58 @@ export function TextGenerator() {
           <CardHeader>
             <CardTitle>Create Your Text</CardTitle>
             <CardDescription>
-              Enter a prompt and adjust settings to generate AI-powered text content
+              Describe the text content you want to generate with AI
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="prompt">Your Prompt</Label>
+              <Label htmlFor="prompt">Text Description</Label>
               <Textarea 
                 id="prompt"
-                placeholder="Enter a detailed description of the text you want to generate..."
+                placeholder="Describe the text you want to create..."
                 value={prompt}
-                onChange={handlePromptChange}
+                onChange={(e) => setPrompt(e.target.value)}
                 className="min-h-[120px]"
               />
             </div>
             
-            <Tabs defaultValue="basic">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="basic">Basic</TabsTrigger>
-                <TabsTrigger value="advanced">Advanced</TabsTrigger>
-              </TabsList>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="style">Writing Style</Label>
+                <Select value={style} onValueChange={setStyle}>
+                  <SelectTrigger id="style">
+                    <SelectValue placeholder="Select style" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="informative">Informative</SelectItem>
+                    <SelectItem value="creative">Creative</SelectItem>
+                    <SelectItem value="professional">Professional</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               
-              <TabsContent value="basic" className="space-y-4 pt-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <Label htmlFor="creativity">Creativity</Label>
-                    <span>{creativity[0]}</span>
-                  </div>
-                  <Slider 
-                    id="creativity"
-                    min={0} 
-                    max={1} 
-                    step={0.1} 
-                    value={creativity} 
-                    onValueChange={setCreativity} 
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <Label htmlFor="length">Length (words)</Label>
-                    <span>{length[0]}</span>
-                  </div>
-                  <Slider 
-                    id="length"
-                    min={100} 
-                    max={2000} 
-                    step={100} 
-                    value={length} 
-                    onValueChange={setLength} 
-                  />
-                </div>
-              </TabsContent>
-              
-              <TabsContent value="advanced" className="space-y-4 pt-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="tone">Tone</Label>
-                    <Input id="tone" placeholder="Professional" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="style">Writing Style</Label>
-                    <Input id="style" placeholder="Blog post" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="audience">Target Audience</Label>
-                    <Input id="audience" placeholder="Professionals" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="format">Format</Label>
-                    <Input id="format" placeholder="Article" />
-                  </div>
-                </div>
-              </TabsContent>
-            </Tabs>
+              <div className="space-y-2">
+                <Label htmlFor="wordCount">Word Count</Label>
+                <Select value={wordCount} onValueChange={setWordCount}>
+                  <SelectTrigger id="wordCount">
+                    <SelectValue placeholder="Select length" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="150">Short (~150 words)</SelectItem>
+                    <SelectItem value="300">Medium (~300 words)</SelectItem>
+                    <SelectItem value="600">Long (~600 words)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </CardContent>
           <CardFooter>
             <Button 
-              onClick={generateText} 
+              onClick={handleGenerate} 
               className="w-full"
-              disabled={isLoading || !prompt.trim()}
+              disabled={isGenerating || !prompt.trim()}
             >
-              {isLoading ? (
+              {isGenerating ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Generating...
@@ -224,78 +187,96 @@ export function TextGenerator() {
         
         <Card className="cosmic-card">
           <CardHeader>
-            <CardTitle>Generated Content</CardTitle>
+            <CardTitle>Generated Text</CardTitle>
             <CardDescription>
-              Your AI-generated text will appear here
+              Your AI-generated content will appear here
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="min-h-[400px] p-4 bg-cosmic-900/50 rounded-md overflow-auto">
-              {isLoading ? (
-                <div className="flex items-center justify-center h-full">
-                  <Loader2 className="h-8 w-8 animate-spin text-cosmic-400" />
+            <div className="min-h-[300px] bg-cosmic-900/50 rounded-md p-4 overflow-auto whitespace-pre-wrap">
+              {isGenerating ? (
+                <div className="flex justify-center items-center h-full">
+                  <div className="text-center">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+                    <p className="text-muted-foreground">Generating your content...</p>
+                  </div>
                 </div>
-              ) : isEditing ? (
-                <Textarea 
-                  value={editableText} 
-                  onChange={handleEditableTextChange} 
-                  className="min-h-[380px] bg-transparent border-0 focus-visible:ring-0 resize-none"
-                  placeholder="Edit your generated text here..."
-                />
               ) : generatedText ? (
-                <div className="text-left whitespace-pre-line">{generatedText}</div>
+                <div className="text-sm">{generatedText}</div>
               ) : (
-                <div className="text-muted-foreground h-full flex items-center justify-center">
-                  Your generated content will appear here
+                <div className="text-muted-foreground flex justify-center items-center h-full">
+                  <p className="text-center">Your generated text will appear here</p>
                 </div>
               )}
             </div>
           </CardContent>
           <CardFooter className="flex justify-between">
-            {isEditing ? (
-              <>
-                <Button variant="outline" onClick={toggleEdit}>
-                  Cancel
-                </Button>
-                <Button onClick={saveEdit}>
-                  <Save className="mr-2 h-4 w-4" />
-                  Save Changes
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="outline" onClick={toggleEdit} disabled={!generatedText}>
-                  Edit
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={exportAsText} 
-                  disabled={!generatedText}
-                >
-                  <FileDown className="mr-2 h-4 w-4" />
-                  Export as .txt
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={copyToClipboard} 
-                  disabled={!generatedText}
-                >
-                  {copied ? (
-                    <>
-                      <Check className="mr-2 h-4 w-4" />
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="mr-2 h-4 w-4" />
-                      Copy
-                    </>
-                  )}
-                </Button>
-              </>
-            )}
+            <Button 
+              variant="outline" 
+              disabled={!generatedText} 
+              onClick={copyToClipboard}
+            >
+              {isCopied ? (
+                <>
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copied
+                </>
+              ) : (
+                <>
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copy
+                </>
+              )}
+            </Button>
+            <Button 
+              variant="outline" 
+              disabled={!generatedText}
+              onClick={downloadAsText}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export as .txt
+            </Button>
           </CardFooter>
         </Card>
+
+        {previousGenerations.length > 0 && (
+          <Card className="cosmic-card lg:col-span-2 mt-4">
+            <CardHeader>
+              <CardTitle>Your Previous Generations</CardTitle>
+              <CardDescription>
+                Previously generated text content
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {previousGenerations.slice(0, 5).map((gen) => (
+                  <div key={gen.id} className="border border-border p-4 rounded-md">
+                    <div className="font-medium mb-2">"{gen.prompt}"</div>
+                    <div className="text-sm text-muted-foreground mb-3 line-clamp-3">
+                      {gen.result}
+                    </div>
+                    <div className="flex justify-end">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => {
+                          setPrompt(gen.prompt);
+                          setGeneratedText(gen.result);
+                          const settings = gen.settings || {};
+                          if (settings.style) setStyle(settings.style);
+                          if (settings.wordCount) setWordCount(settings.wordCount.toString());
+                        }}
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Use Again
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
